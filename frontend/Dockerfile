@@ -39,6 +39,15 @@ ENV NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV
 ARG NEXT_PUBLIC_BUILD_SHA=
 ENV NEXT_PUBLIC_BUILD_SHA=$NEXT_PUBLIC_BUILD_SHA
 
+# Whether this build may state that its data is synthetic. Declared here for the
+# same reason NEXT_PUBLIC_APP_ENV is: an undeclared ARG is silently dropped, and
+# a banner variable that never arrives is precisely the failure above. Left
+# EMPTY on purpose — the banner then says nothing about the data. Set it to
+# "true" only for a build whose database really is synthetic; app.metocare.me
+# serves the restored production data and must never set it.
+ARG NEXT_PUBLIC_DATA_IS_SYNTHETIC=
+ENV NEXT_PUBLIC_DATA_IS_SYNTHETIC=$NEXT_PUBLIC_DATA_IS_SYNTHETIC
+
 # Enable standalone output for minimal runtime image
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
