@@ -1,0 +1,67 @@
+name: Demo Frontend Image Build
+
+# Builds the patient frontend for the app.metocare.me demo deployment.
+#
+# NEXT_PUBLIC_API_URL is inlined into the client bundle at BUILD time (see
+# frontend/Dockerfile), so the demo cannot reuse the production image — its
+# baked API URL points at the decommissioned Container Apps backend. This
+# workflow is the governed build path: build once, push to GHCR, emit the
+# immutable digest. Deployment happens separately, by digest, never by tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Backend API base URL to bake into the client bundle
+        required: true
+        default: https://app-metocare-demo-api.azurewebsites.net/api/v1
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build & push frontend image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          SHA8=$(git rev-parse --short=8 HEAD)
+          echo "sha8=${SHA8}" >> "$GITHUB_OUTPUT"
+          echo "tag=demo-${SHA8}-$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ inputs.api_url }}
+            NEXT_PUBLIC_APP_ENV=demo
+            NEXT_PUBLIC_BUILD_SHA=${{ steps.tag.outputs.sha8 }}
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/metocare-frontend:${{ steps.tag.outputs.tag }}
+
+      - name: Emit immutable digest
+        run: |
+          echo "### Frontend demo image" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "digest: \`${{ steps.build.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "tag: \`${{ steps.tag.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "api_url: \`${{ inputs.api_url }}\`" >> "$GITHUB_STEP_SUMMARY"
